@@ -5,23 +5,35 @@ import { compileTemplate } from '@ember/template-compilation';
 import { assign } from '@ember/polyfills';
 import layout from '../templates/components/render-template';
 
-
 export default Component.extend({
   tagName: '',
   layout,
 
   props: null,
 
+  onError() {},
+  onSuccess() {},
+
   didReceiveAttrs() {
     this._super(...arguments);
+    const { onError, onSuccess } = this;
 
     once(this, function () {
+      let hasError = false;
       let owner = getOwner(this);
       let _props = this.get('props') || {};
       let domForAppWithGlimmer2 = owner.lookup('service:-document');
+      let layout = '';
+
+      try {
+        layout = compileTemplate(this.get('templateString') || '');
+      } catch(e) {
+        this.onError(e);
+        return;
+      }
 
       let props = assign({}, _props, {
-        layout: compileTemplate(this.get('templateString') || ''),
+        layout,
       });
 
       let ComponentFactory = owner.factoryFor('component:render-template-result');
@@ -35,9 +47,16 @@ export default Component.extend({
       }
 
       setOwner(componentInstance, owner);
-      componentInstance.appendTo(container);
 
-      this.set('result', container);
+      try {
+        componentInstance.appendTo(container);
+        this.set('result', container);
+        this.onSuccess();
+      } catch(e) {
+        this.onError(e);
+        componentInstance.destroy();
+        this.set('result', '');
+      }
     });
   }
 });
